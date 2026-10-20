@@ -1,74 +1,61 @@
-# ESP32-S3 Multi-Sensor IoT Telemetry & Monitoring Node
+# Edge-AI Condition-Based Monitoring (CBM) Node
 
-Embedded firmware developed in **C++** using **PlatformIO / VS Code** for an ESP32-S3 development board, designed to acquire, process, and stream multi-sensor industrial data (vibration and current) over Wi-Fi using the MQTT protocol.
+## Problem Statement
+One of the most well-known disadvantages of traditional industrial strategies is reactive maintenance. This traditional method requires scheduled downtime and human intervention, which reduces productivity and poses high safety risks for factory workers.
 
-## Hardware Stack
-* **Microcontroller:** ESP32-S3 WROOM-1
-* **Motion Sensor:** MPU6050 (3-axis Accelerometer & 3-axis Gyroscope via I2C)
-* **Current Sensor:** ACS712 (Analog current measurement via ADC)
-* **Actuator / Load:** 5V DC Motor driven via IRFZ44N MOSFET
+## General Concept
+It is a project inspired by Industry 4.0 core strategies and technologies, enabling real-time decision-making, high precision, and modular flexibility. 
 
-## Firmware Architecture
-* **`src/main.cpp`**: Main application loop and task initialization.
-* **`include/sensors.h`**: I2C driver interface for MPU6050 and ADC sampling filters for ACS712.
-* **`include/mqtt_client.h`**: Handles secure Wi-Fi reconnection logic and JSON payload publishing.
+* **Core Strategies:** Condition-Based Monitoring (CBM) & Predictive Maintenance (PdM), Edge Computing (Edge-AI), Industrial Internet of Things (IIoT), Cyber-Physical Systems (CPS).
+* **Core Tools:** Edge Hardware (ESP32-S3 WROOM-1 N16R8), Sensor Fusion (MPU6500 6-DOF IMU, ACS712 5A Current Sensor), Firmware Development Tools (C++ / Arduino Framework, PlatformIO), Machine Learning (Scikit-Learn, m2cgen), Industrial IoT (MQTT & JSON).
 
-## Telemetry Payload Example
-Sensor data is packaged into JSON format and published via MQTT:
-```json
-{
-  "device_id": "esp32s3_node_01",
-  "accel_rms": 0.42,
-  "current_amps": 1.25,
-  "status": "nominal"
-}
-```
+## System Architecture
+To realize this system, we used 3 main core subsystems designed for data acquisition, local edge processing, and IIoT telemetry:
 
-### Step 3: Core C++ Firmware Template (`src/main.cpp`)
-Here is a clean, structured skeleton of the C++ code you can put inside repository's `src/main.cpp` file. It sets up the Wi-Fi connection, initializes the I2C bus for the MPU6050, reads analog current, and builds the structure for telemetry:
+1. **Mechanical & Electrical Sensing:**
+   This system features an ESP32 running C++ firmware alongside two multi-domain sensors to measure structural vibrations (mechanical) captured via the MPU6500 sensor and current consumption using the ACS712 5A sensor (electrical).
 
-```cpp
-#include <Arduino.h>
-#include <Wire.h>
+2. **Localized Edge-AI Inferencing (No Cloud):**
+   Raw sensor data is processed locally on the ESP32-S3 chip using a machine learning classification model (Scikit-Learn). Without relying on a network connection, the system autonomously categorizes machine health into clear operational states (*Optimal, Warning, Critical Shutdown*) in milliseconds.
 
-// Pin Definitions
-const int CURRENT_SENSOR_PIN = A0; // ACS712 analog input
-const int MPU6050_ADDR = 0x68;     // I2C address for MPU6050
+3. **Industrial IoT (IIoT):**
+   It streams live diagnostic data packets in JSON format over Wi-Fi using the MQTT protocol, feeding real-time monitoring dashboards for remote supervision.
 
-void setupMPU6050() {
-  Wire.begin();
-  Wire.beginTransmission(MPU6050_ADDR);
-  Wire.write(0x6B); // Power management register
-  Wire.write(0);    // Wake up MPU6050
-  Wire.endTransmission(true);
-}
+---
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(CURRENT_SENSOR_PIN, INPUT);
-  setupMPU6050();
-  Serial.println("ESP32-S3 Sensor Node Initialized.");
-}
+## Hardware Architecture
+1. **Components List:**
+   * **Microcontroller:** ESP32-S3 WROOM-1 N16R8 (16MB Flash, 8MB PSRAM)
+   * **Vibration Sensor:** MPU6500 (6-DOF Accelerometer/Gyroscope, I2C Interface)
+   * **Current Sensor:** ACS712 5A Module (Analog Hall-effect current sensor)
 
-void loop() {
-  // Read Analog Current (ACS712)
-  int rawADC = analogRead(CURRENT_SENSOR_PIN);
-  float voltage = (rawADC / 4095.0) * 3.3; // ESP32 ADC reference
-  float currentAmps = (voltage - 2.5) / 0.185; // Example calibration for 5A module
+2. **Pinout Connections (ESP32-S3):**
+   * **MPU6500 (I2C Communication):**
+     * `VCC` $\rightarrow$ `3.3V` (ESP32)
+     * `GND` $\rightarrow$ `GND` (ESP32)
+     * `SDA` $\rightarrow$ `GPIO 8` (default I2C SDA pin)
+     * `SCL` $\rightarrow$ `GPIO 9` (default I2C SCL pin)
+   * **ACS712 5A (Analog Output):**
+     * `VCC` $\rightarrow$ `5V` (External supply / USB 5V line)
+     * `GND` $\rightarrow$ `GND` (Common Ground)
+     * `OUT` $\rightarrow$ **Voltage Divider** $\rightarrow$ `GPIO 4` (ESP32 ADC Pin)
 
-  // Read MPU6050 Simulation / Data Request via I2C
-  Wire.beginTransmission(MPU6050_ADDR);
-  Wire.write(0x3B); // Starting register for Accelerometer measurements
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU6050_ADDR, 6, true);
+---
 
-  int16_t ax = Wire.read() << 8 | Wire.read();
-  int16_t ay = Wire.read() << 8 | Wire.read();
-  int16_t az = Wire.read() << 8 | Wire.read();
+## Edge-AI Workflow & Logic
+1. **Data Collection Pipeline:**
+   * Firmware runs a loop every 100ms reading MPU6500 and ACS712 5A.
+   * Serial monitor streams data formatted as CSV strings.
+   * Python script (`pyserial`) logs incoming data into `sensor_data.csv` under distinct states:
+     * `0`: Optimal
+     * `1`: Warning 
+     * `2`: Critical 
 
-  // Print telemetry payload to Serial / MQTT stream
-  Serial.printf("Telemetry -> Current: %.2f A | Accel X: %d, Y: %d, Z: %d\n", currentAmps, ax, ay, az);
+2. **Machine Learning Training (Scikit-Learn):**
+   * Dataset processed in Python using a **Decision Tree Classifier**.
+   * Input features: `[Current, Accel_X, Accel_Y, Accel_Z]`.
+   * Output labels: `[0, 1, 2]`.
 
-  delay(1000); // 1-second telemetry sampling interval
-}
-```
+3. **Edge Deployment (m2cgen):**
+   * Trained Python model converted into pure C++ code via `m2cgen` into a header file (`model.h`).
+   * Embedded directly into ESP32-S3 `main.cpp` firmware to perform real-time low-latency local inferencing without external cloud dependency.
